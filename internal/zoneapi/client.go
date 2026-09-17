@@ -247,7 +247,9 @@ func (c *Client) attempt(ctx context.Context, method, path string, body []byte) 
 	if err != nil {
 		return nil, 0, fmt.Errorf("zone.eu: %s %s: %w", method, path, err)
 	}
-	defer resp.Body.Close()
+	// The body is read in full below, so a Close error tells us nothing
+	// actionable; it is discarded explicitly rather than silently.
+	defer func() { _ = resp.Body.Close() }()
 
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
 	if err != nil {

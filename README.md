@@ -122,7 +122,7 @@ terraform import zone_dns_zone.example "example.com"   # zones import by name
 
 ## Development
 
-Needs Go 1.26+ and a `terraform` binary on PATH.
+Needs Go 1.25+ and a `terraform` binary on PATH.
 
 ```sh
 make build   # compile the provider

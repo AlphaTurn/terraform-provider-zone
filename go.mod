@@ -1,11 +1,11 @@
 module github.com/AlphaTurn/terraform-provider-zone
 
-go 1.26.0
+go 1.25.8
 
 require (
 	github.com/hashicorp/terraform-plugin-framework v1.19.0
 	github.com/hashicorp/terraform-plugin-testing v1.16.0
-	golang.org/x/time v0.16.0
+	golang.org/x/time v0.15.0
 )
 
 require (
