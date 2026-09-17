@@ -52,7 +52,7 @@ func (p *zoneProvider) Metadata(_ context.Context, _ provider.MetadataRequest, r
 
 func (p *zoneProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "Manages DNS records hosted by [zone.eu](https://www.zone.eu) through the ZoneID API v2.\n\n" +
+		MarkdownDescription: "Manages DNS, domains and webhosting at [zone.eu](https://www.zone.eu) through the ZoneID API v2.\n\n" +
 			"Credentials are an API token generated under ZoneID account management, paired with the " +
 			"ZoneID username it belongs to.",
 		Attributes: map[string]schema.Attribute{
@@ -169,11 +169,16 @@ func (p *zoneProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 func (p *zoneProvider) Resources(context.Context) []func() resource.Resource {
 	definitions := dnsrecord.Definitions()
 
-	resources := make([]func() resource.Resource, 0, len(definitions)+1)
+	resources := make([]func() resource.Resource, 0, len(definitions)+4)
 	for _, definition := range definitions {
 		resources = append(resources, dnsrecord.NewResource(definition))
 	}
-	resources = append(resources, NewZoneResource)
+	resources = append(resources,
+		NewZoneResource,
+		NewDomainResource,
+		NewDomainNameserversResource,
+		NewDomainContactResource,
+	)
 	return resources
 }
 
@@ -181,6 +186,8 @@ func (p *zoneProvider) DataSources(context.Context) []func() datasource.DataSour
 	return []func() datasource.DataSource{
 		NewZoneDataSource,
 		NewRecordsDataSource,
+		NewDomainsDataSource,
+		NewVServersDataSource,
 	}
 }
 

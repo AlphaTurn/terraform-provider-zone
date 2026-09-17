@@ -106,3 +106,58 @@ data "zone_dns_zone" "this" {
 		},
 	})
 }
+
+// liveAccount gates the tests that only read account-wide listings, which need
+// no disposable zone of their own.
+func liveAccount(t *testing.T) {
+	t.Helper()
+
+	if os.Getenv("ZONE_USERNAME") == "" || os.Getenv("ZONE_API_TOKEN") == "" {
+		t.Skip("set ZONE_USERNAME and ZONE_API_TOKEN to run live tests")
+	}
+}
+
+// Reading the real domain listing is how the /domain schema gets verified: the
+// published description disagrees with the wire about several fields, and a
+// decode error or a missing attribute shows up here and nowhere else. It reads
+// and writes nothing.
+func TestLiveDomainsDataSource(t *testing.T) {
+	liveAccount(t)
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: liveProviderConfig + `
+data "zone_domains" "all" {}
+`,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttrSet("data.zone_domains.all", "domains.#"),
+					resource.TestCheckResourceAttrSet("data.zone_domains.all", "domains.0.name"),
+					resource.TestCheckResourceAttrSet("data.zone_domains.all", "domains.0.expires"),
+				),
+			},
+		},
+	})
+}
+
+// Same for /vserver, which is not in the published API description at all.
+func TestLiveVServersDataSource(t *testing.T) {
+	liveAccount(t)
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: liveProviderConfig + `
+data "zone_vservers" "all" {}
+`,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttrSet("data.zone_vservers.all", "services.#"),
+					resource.TestCheckResourceAttrSet("data.zone_vservers.all", "services.0.name"),
+					resource.TestCheckResourceAttrSet("data.zone_vservers.all", "services.0.mysql_host"),
+				),
+			},
+		},
+	})
+}

@@ -58,7 +58,16 @@ export ZONE_API_TOKEN="..."
 | `zone_dns_url_record` | zone.eu's HTTP redirect record |
 | `zone_dns_zone` | settings of an existing zone |
 
-Data sources: `zone_dns_zone` and `zone_dns_records`.
+Domains:
+
+| Resource | |
+|---|---|
+| `zone_domain` | renewal and signing settings of a registered domain |
+| `zone_domain_nameservers` | a domain's whole nameserver delegation |
+| `zone_domain_contact` | a registry contact attached to a domain |
+
+Data sources: `zone_dns_zone`, `zone_dns_records`, `zone_domains` and
+`zone_vservers`.
 
 Full reference, including every argument, lives in [`docs/`](docs/) and on the
 Terraform Registry.

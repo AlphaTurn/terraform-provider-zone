@@ -25,6 +25,11 @@ type stubAPI struct {
 	records map[string][]map[string]any
 	nextID  int64
 
+	domains     map[string]*stubDomain
+	nameservers map[string][]map[string]any
+	contacts    map[string][]map[string]any
+	vservers    []map[string]any
+
 	// Requests counts served requests, so tests can assert that a refresh costs
 	// one listing per record type rather than one per record.
 	Requests atomic.Int64
@@ -43,6 +48,11 @@ func newStubAPI() *stubAPI {
 		},
 		records: make(map[string][]map[string]any),
 		nextID:  100000,
+
+		domains:     newStubDomains(),
+		nameservers: newStubNameservers(),
+		contacts:    newStubContacts(),
+		vservers:    newStubVServers(),
 	}
 }
 
@@ -157,7 +167,25 @@ func (s *stubAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-RateLimit-Remaining", "59")
 
 	segments := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
-	if len(segments) < 2 || segments[0] != "dns" {
+	if len(segments) == 0 || segments[0] == "" {
+		s.fail(w, http.StatusNotFound, "Unknown endpoint")
+		return
+	}
+
+	switch segments[0] {
+	case "dns":
+		s.serveDNS(w, r, segments)
+	case "domain":
+		s.serveDomain(w, r, segments)
+	case "vserver":
+		s.serveVServer(w, r, segments)
+	default:
+		s.fail(w, http.StatusNotFound, "Unknown endpoint")
+	}
+}
+
+func (s *stubAPI) serveDNS(w http.ResponseWriter, r *http.Request, segments []string) {
+	if len(segments) < 2 {
 		s.fail(w, http.StatusNotFound, "Unknown endpoint")
 		return
 	}

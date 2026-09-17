@@ -1,7 +1,9 @@
 package zoneapi
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"strings"
 )
@@ -99,4 +101,93 @@ func valueToString(value any) (string, bool) {
 	default:
 		return "", false
 	}
+}
+
+// coerceOptionalString is coerceString for a field that is meaningfully null.
+//
+// Several fields distinguish "no value" from the empty string: a domain's
+// delegated is null when the domain is not delegated, and renew_order is null
+// when no renewal is pending. Flattening those to "" would report a state the
+// API never described.
+func coerceOptionalString(raw json.RawMessage) *string {
+	if isJSONNull(raw) {
+		return nil
+	}
+	if value, ok := coerceString(raw); ok {
+		return &value
+	}
+	return nil
+}
+
+// coerceOptionalInt64 is coerceInt64 for a field that is meaningfully null,
+// such as a domain's has_pending_trade.
+func coerceOptionalInt64(raw json.RawMessage) *int64 {
+	if isJSONNull(raw) {
+		return nil
+	}
+	if value, ok := coerceInt64(raw); ok {
+		return &value
+	}
+	return nil
+}
+
+// coerceStringSlice reads an array of strings, tolerating a bare string where
+// the API documents a list.
+func coerceStringSlice(raw json.RawMessage) ([]string, bool) {
+	if isJSONNull(raw) {
+		return nil, false
+	}
+
+	var list []string
+	if err := json.Unmarshal(raw, &list); err == nil {
+		return list, true
+	}
+	if single, ok := coerceString(raw); ok {
+		return []string{single}, true
+	}
+	return nil, false
+}
+
+// coerceStringMap reads an object of strings.
+//
+// This exists for a server_fingerprints, which the published schema calls an
+// array of strings and the live API returns as an object keyed by algorithm. An
+// array yields nothing rather than an error, because tolerance on the way in is
+// this package's house rule.
+func coerceStringMap(raw json.RawMessage) (map[string]string, bool) {
+	if isJSONNull(raw) {
+		return nil, false
+	}
+
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return nil, false
+	}
+
+	out := make(map[string]string, len(fields))
+	for key, value := range fields {
+		if text, ok := coerceString(value); ok {
+			out[key] = text
+		}
+	}
+	return out, true
+}
+
+func isJSONNull(raw json.RawMessage) bool {
+	return len(raw) == 0 || string(bytes.TrimSpace(raw)) == "null"
+}
+
+// decodeFields splits an object into its raw fields, preserving numbers in a
+// form the coerce helpers can read either way.
+//
+// Every read model in this package starts here rather than with struct tags,
+// because the API's scalar types cannot be trusted and a single surprising
+// field should not fail a whole read.
+func decodeFields(data []byte, fields *map[string]json.RawMessage) error {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.UseNumber()
+	if err := dec.Decode(fields); err != nil {
+		return fmt.Errorf("zone.eu: decoding object: %w", err)
+	}
+	return nil
 }
