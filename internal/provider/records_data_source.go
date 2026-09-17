@@ -20,7 +20,7 @@ import (
 func NewRecordsDataSource() datasource.DataSource { return &recordsDataSource{} }
 
 type recordsDataSource struct {
-	client *zoneapi.Client
+	dataSourceClient
 }
 
 var (
@@ -133,21 +133,6 @@ func (d *recordsDataSource) Schema(_ context.Context, _ datasource.SchemaRequest
 			},
 		},
 	}
-}
-
-func (d *recordsDataSource) Configure(_ context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
-	if req.ProviderData == nil {
-		return
-	}
-	client, ok := req.ProviderData.(*zoneapi.Client)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Unexpected provider data",
-			fmt.Sprintf("Expected *zoneapi.Client but got %T. This is a bug in the provider.", req.ProviderData),
-		)
-		return
-	}
-	d.client = client
 }
 
 func (d *recordsDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {

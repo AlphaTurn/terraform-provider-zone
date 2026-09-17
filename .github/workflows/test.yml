@@ -53,7 +53,9 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - run: go install github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs@latest
+      # Pinned for the same reason golangci-lint is: a tfplugindocs release
+      # should not be able to redden CI on a commit that did not touch the docs.
+      - run: go install github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs@v0.25.0
       - run: tfplugindocs generate --provider-name zone
       - name: Fail if docs/ is stale
         run: |
@@ -68,8 +70,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Oldest supported, plus the current release.
-        terraform: ['1.8.*', '1.15.*']
+        # Oldest supported, the floor for write-only attributes, and the
+        # current release. zone_ssl_certificate and every password argument
+        # use write-only attributes, which need 1.11; their tests skip
+        # themselves below it, so 1.8 stays supported for everything else.
+        terraform: ['1.8.*', '1.11.*', '1.15.*']
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7

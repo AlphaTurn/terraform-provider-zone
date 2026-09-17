@@ -19,7 +19,7 @@ import (
 func NewZoneResource() resource.Resource { return &zoneResource{} }
 
 type zoneResource struct {
-	client *zoneapi.Client
+	resourceClient
 }
 
 var (
@@ -73,21 +73,6 @@ func (r *zoneResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 			},
 		},
 	}
-}
-
-func (r *zoneResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
-	if req.ProviderData == nil {
-		return
-	}
-	client, ok := req.ProviderData.(*zoneapi.Client)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Unexpected provider data",
-			fmt.Sprintf("Expected *zoneapi.Client but got %T. This is a bug in the provider.", req.ProviderData),
-		)
-		return
-	}
-	r.client = client
 }
 
 // Create adopts an existing zone. There is nothing to create on zone.eu's side,

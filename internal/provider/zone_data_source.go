@@ -15,7 +15,7 @@ import (
 func NewZoneDataSource() datasource.DataSource { return &zoneDataSource{} }
 
 type zoneDataSource struct {
-	client *zoneapi.Client
+	dataSourceClient
 }
 
 var (
@@ -54,21 +54,6 @@ func (d *zoneDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, r
 			},
 		},
 	}
-}
-
-func (d *zoneDataSource) Configure(_ context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
-	if req.ProviderData == nil {
-		return
-	}
-	client, ok := req.ProviderData.(*zoneapi.Client)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Unexpected provider data",
-			fmt.Sprintf("Expected *zoneapi.Client but got %T. This is a bug in the provider.", req.ProviderData),
-		)
-		return
-	}
-	d.client = client
 }
 
 func (d *zoneDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
