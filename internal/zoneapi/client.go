@@ -170,36 +170,58 @@ func New(username, token string, opts ...Option) (*Client, error) {
 	}, nil
 }
 
+// response is one successful round trip: the elements of the array envelope and
+// the headers that arrived with them. The pager lives in the headers, so a
+// listing that follows pages has to be able to see them.
+type response struct {
+	records []json.RawMessage
+	header  http.Header
+}
+
 // do issues a request, repeating the failures that are worth repeating, and
 // returns the elements of the response's array envelope.
-func (c *Client) do(ctx context.Context, method, path string, payload any) ([]json.RawMessage, error) {
+func (c *Client) do(ctx context.Context, method, path string, payload any, opts ...requestOption) ([]json.RawMessage, error) {
+	resp, err := c.doSpec(ctx, method, path, payload, newRequestSpec(opts))
+	if err != nil {
+		return nil, err
+	}
+	return resp.records, nil
+}
+
+// doSpec is [Client.do] over an already-resolved spec, returning the response
+// headers alongside the records. It holds the retry loop.
+//
+// Options are resolved by the caller rather than here so that every attempt
+// sends a byte-identical request: an option applied once per attempt would be a
+// latent bug in a path that is awkward to test.
+func (c *Client) doSpec(ctx context.Context, method, path string, payload any, spec requestSpec) (response, error) {
 	var encoded []byte
 	if payload != nil {
 		var err error
 		if encoded, err = json.Marshal(payload); err != nil {
-			return nil, fmt.Errorf("zone.eu: encoding %s %s body: %w", method, path, err)
+			return response{}, fmt.Errorf("zone.eu: encoding %s %s body: %w", method, path, err)
 		}
 	}
 
 	for attempt := 0; ; attempt++ {
 		if err := c.limiter.Wait(ctx); err != nil {
-			return nil, fmt.Errorf("zone.eu: waiting for a rate limit slot: %w", err)
+			return response{}, fmt.Errorf("zone.eu: waiting for a rate limit slot: %w", err)
 		}
 		if err := c.pace(ctx); err != nil {
-			return nil, err
+			return response{}, err
 		}
 
-		records, retryAfter, err := c.attempt(ctx, method, path, encoded)
+		resp, retryAfter, err := c.attempt(ctx, method, path, encoded, spec)
 		if err == nil {
-			return records, nil
+			return resp, nil
 		}
 		if attempt >= c.maxRetries || !isRetryable(method, err) {
-			return nil, err
+			return response{}, err
 		}
 
 		select {
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			return response{}, ctx.Err()
 		case <-time.After(backoff(attempt, retryAfter)):
 		}
 	}
@@ -226,15 +248,22 @@ func (c *Client) pace(ctx context.Context) error {
 
 // attempt performs one HTTP round trip. The returned duration is a
 // server-requested retry delay, if there was one.
-func (c *Client) attempt(ctx context.Context, method, path string, body []byte) ([]json.RawMessage, time.Duration, error) {
+func (c *Client) attempt(
+	ctx context.Context, method, path string, body []byte, spec requestSpec,
+) (response, time.Duration, error) {
 	var reader io.Reader
 	if body != nil {
 		reader = bytes.NewReader(body)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, c.baseURL.String()+path, reader)
+	endpoint := c.baseURL.String() + path
+	if len(spec.query) > 0 {
+		endpoint += "?" + spec.query.Encode()
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, endpoint, reader)
 	if err != nil {
-		return nil, 0, fmt.Errorf("zone.eu: building %s %s request: %w", method, path, err)
+		return response{}, 0, fmt.Errorf("zone.eu: building %s %s request: %w", method, path, err)
 	}
 	req.SetBasicAuth(c.username, c.token)
 	req.Header.Set("Accept", "application/json")
@@ -242,10 +271,15 @@ func (c *Client) attempt(ctx context.Context, method, path string, body []byte) 
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
+	// Applied after the fixed headers so a per-request option wins. The options
+	// are unexported, so this cannot be abused from outside the package.
+	for name, values := range spec.header {
+		req.Header[name] = values
+	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, 0, fmt.Errorf("zone.eu: %s %s: %w", method, path, err)
+		return response{}, 0, fmt.Errorf("zone.eu: %s %s: %w", method, path, err)
 	}
 	// The body is read in full below, so a Close error tells us nothing
 	// actionable; it is discarded explicitly rather than silently.
@@ -253,7 +287,7 @@ func (c *Client) attempt(ctx context.Context, method, path string, body []byte) 
 
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
 	if err != nil {
-		return nil, 0, fmt.Errorf("zone.eu: reading %s %s response: %w", method, path, err)
+		return response{}, 0, fmt.Errorf("zone.eu: reading %s %s response: %w", method, path, err)
 	}
 
 	c.budget.observe(resp.Header)
@@ -265,7 +299,7 @@ func (c *Client) attempt(ctx context.Context, method, path string, body []byte) 
 		if message == "" {
 			message = strings.Join(messages, "; ")
 		}
-		return nil, retryAfter, &APIError{
+		return response{header: resp.Header}, retryAfter, &APIError{
 			StatusCode:  resp.StatusCode,
 			Method:      method,
 			Path:        path,
@@ -277,26 +311,27 @@ func (c *Client) attempt(ctx context.Context, method, path string, body []byte) 
 
 	trimmed := bytes.TrimSpace(raw)
 	if resp.StatusCode == http.StatusNoContent || len(trimmed) == 0 {
-		return nil, 0, nil
+		return response{header: resp.Header}, 0, nil
 	}
 
 	// The documented envelope is an array, but a few endpoints answer with a
-	// bare object; treat that as a one-element result rather than failing.
+	// bare object; treat that as a one-element result rather than failing. Every
+	// OPTIONS endpoint does this, and so does the occasional GET.
 	if trimmed[0] == '{' {
-		return []json.RawMessage{trimmed}, 0, nil
+		return response{records: []json.RawMessage{trimmed}, header: resp.Header}, 0, nil
 	}
 
 	var list []json.RawMessage
 	if err := json.Unmarshal(trimmed, &list); err != nil {
-		return nil, 0, fmt.Errorf("zone.eu: decoding %s %s response: %w", method, path, err)
+		return response{header: resp.Header}, 0, fmt.Errorf("zone.eu: decoding %s %s response: %w", method, path, err)
 	}
-	return list, 0, nil
+	return response{records: list, header: resp.Header}, 0, nil
 }
 
 // doOne issues a request expecting a single resource and decodes it into out.
 // An empty array is the API's way of reporting a missing resource.
-func (c *Client) doOne(ctx context.Context, method, path string, payload, out any) error {
-	records, err := c.do(ctx, method, path, payload)
+func (c *Client) doOne(ctx context.Context, method, path string, payload, out any, opts ...requestOption) error {
+	records, err := c.do(ctx, method, path, payload, opts...)
 	if err != nil {
 		return err
 	}

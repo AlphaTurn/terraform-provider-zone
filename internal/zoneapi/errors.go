@@ -64,6 +64,31 @@ func IsNotFound(err error) bool {
 	return errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusNotFound
 }
 
+// IsPaymentRequired reports whether err is the API's 402, which it returns when
+// an operation needs a paid package upgrade rather than when a request is
+// malformed.
+//
+// This is worth distinguishing because the fix is a purchase, not a change to
+// the configuration, and because it means the operation did not happen: a
+// generic "bad request" would send the user looking for a mistake in their HCL
+// that is not there.
+func IsPaymentRequired(err error) bool {
+	var apiErr *APIError
+	return errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusPaymentRequired
+}
+
+// IsForbidden reports whether err is the API's 403.
+//
+// A service delegated to another ZoneID user answers 403 on some of its
+// endpoints while answering 200 on others, so this is not an authentication
+// problem and must not be treated as one. It is emphatically not [IsNotFound]
+// either: reporting a forbidden resource as missing would make Terraform drop
+// it from state and then offer to create it again.
+func IsForbidden(err error) bool {
+	var apiErr *APIError
+	return errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusForbidden
+}
+
 // AsAPIError extracts the underlying [APIError], if there is one.
 func AsAPIError(err error) (*APIError, bool) {
 	var apiErr *APIError
