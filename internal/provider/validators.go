@@ -135,3 +135,39 @@ func pemBeginLine(value string) string {
 	}
 	return ""
 }
+
+// isSSHPublicKey checks the shape of an OpenSSH public key line.
+//
+// It catches the two mistakes people actually make: pasting a private key, and
+// passing a path instead of the file's contents. It does not try to validate
+// the key material, which is the server's job.
+func isSSHPublicKey() validator.String {
+	return stringCheck{
+		description: "must be an OpenSSH public key",
+		check: func(value string) error {
+			trimmed := strings.TrimSpace(value)
+			if strings.HasPrefix(trimmed, "-----BEGIN") {
+				return fmt.Errorf(
+					"is a PEM block, not an OpenSSH public key. This wants the single line from a " +
+						".pub file, and a private key must never be sent here.",
+				)
+			}
+
+			fields := strings.Fields(trimmed)
+			if len(fields) < 2 {
+				return fmt.Errorf(
+					"is not an OpenSSH public key: it should read like \"ssh-ed25519 AAAA... comment\". " +
+						"Pass the file's contents, for example with file(\"~/.ssh/id_ed25519.pub\").",
+				)
+			}
+
+			algorithm := fields[0]
+			for _, prefix := range []string{"ssh-", "ecdsa-", "sk-"} {
+				if strings.HasPrefix(algorithm, prefix) {
+					return nil
+				}
+			}
+			return fmt.Errorf("names an unrecognised key algorithm %q.", algorithm)
+		},
+	}
+}

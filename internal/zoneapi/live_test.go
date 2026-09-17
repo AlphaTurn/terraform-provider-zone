@@ -263,3 +263,82 @@ func TestLiveCertificateReads(t *testing.T) {
 		}
 	}
 }
+
+// SSH, FTP and crontab reads. The crontab check is the one that matters most:
+// no account available for testing has a crontab, so if one ever appears this
+// is what will reveal whether the field names guessed from OPTIONS are right.
+func TestLiveAccessReads(t *testing.T) {
+	client := liveClient(t)
+	ctx := context.Background()
+	service := liveService(t, client)
+
+	settings, err := client.GetSSHSettings(ctx, service)
+	if err != nil {
+		if IsForbidden(err) {
+			t.Skipf("%s is delegated and refuses this endpoint for this account", service)
+		}
+		t.Fatalf("GetSSHSettings(%q): %v", service, err)
+	}
+	if settings.Username == "" {
+		t.Error("SSH settings decoded with no username")
+	}
+	if settings.Access == "" {
+		t.Error("SSH settings decoded with no access mode")
+	}
+	// The published schema calls this an array of strings; it is an object
+	// keyed by algorithm, and a nil map here means that was decoded wrongly.
+	if len(settings.Fingerprints) == 0 {
+		t.Error("server_fingerprints decoded empty, so it is not being read as a keyed object")
+	}
+
+	keys, err := client.ListSSHPublicKeys(ctx, service)
+	if err != nil && !IsForbidden(err) {
+		t.Fatalf("ListSSHPublicKeys(%q): %v", service, err)
+	}
+	for _, key := range keys {
+		if key.ID == 0 {
+			t.Error("an SSH key decoded with no identificator, which arrives as a bare integer")
+		}
+		if key.Fingerprint == "" {
+			t.Errorf("SSH key %d decoded with no fingerprint", key.ID)
+		}
+	}
+
+	if _, err := client.ListSSHWhitelist(ctx, service); err != nil && !IsForbidden(err) {
+		t.Errorf("ListSSHWhitelist(%q): %v", service, err)
+	}
+
+	users, err := client.ListFTPUsers(ctx, service)
+	if err != nil && !IsForbidden(err) {
+		t.Fatalf("ListFTPUsers(%q): %v", service, err)
+	}
+	for _, user := range users {
+		if user.ID == 0 {
+			t.Error("an FTP user decoded with no identificator")
+		}
+		if user.AccessProfile == "" {
+			t.Errorf("FTP user %d decoded with no access profile", user.ID)
+		}
+	}
+
+	if _, err := client.ListFTPWhitelist(ctx, service); err != nil && !IsForbidden(err) {
+		t.Errorf("ListFTPWhitelist(%q): %v", service, err)
+	}
+
+	jobs, err := client.ListCrontabs(ctx, service)
+	if err != nil && !IsForbidden(err) {
+		t.Fatalf("ListCrontabs(%q): %v", service, err)
+	}
+	for _, job := range jobs {
+		if job.Name == "" {
+			t.Error("a crontab decoded with no name")
+		}
+		// This is the assertion worth having. The field names come from
+		// OPTIONS rather than from any read, so an empty one here means the
+		// live object uses the published schema's spelling after all.
+		if job.ExecType == "" {
+			t.Errorf("crontab %d decoded with no exec_type, and no type either: the field names "+
+				"taken from OPTIONS are wrong and both spellings are missing", job.ID)
+		}
+	}
+}

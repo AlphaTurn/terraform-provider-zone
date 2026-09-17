@@ -25,6 +25,13 @@ type stubService struct {
 	dbAccounts     []map[string]any
 	permissions    map[string][]map[string]any
 	certificates   []map[string]any
+
+	sshAccess    string
+	publicKeys   []map[string]any
+	sshWhitelist []map[string]any
+	ftpUsers     []map[string]any
+	ftpWhitelist []map[string]any
+	crontabs     []map[string]any
 }
 
 const stubServiceName = "virt1.example.com"
@@ -34,6 +41,7 @@ func newStubServices() map[string]*stubService {
 		stubServiceName: {
 			autoreplies: make(map[string]map[string]any),
 			permissions: make(map[string][]map[string]any),
+			sshAccess:   "public",
 		},
 	}
 }
@@ -136,6 +144,12 @@ func (s *stubAPI) serveVServerService(w http.ResponseWriter, r *http.Request, se
 		s.serveMySQL(w, r, service, rest[2:])
 	case rest[0] == "ssl":
 		s.serveSSL(w, r, service, rest[1:])
+	case rest[0] == "ssh":
+		s.serveSSH(w, r, service, rest[1:])
+	case rest[0] == "ftp":
+		s.serveFTP(w, r, service, rest[1:])
+	case rest[0] == "crontab":
+		s.serveCrontab(w, r, service, rest[1:])
 	default:
 		s.fail(w, http.StatusNotFound, "Unknown endpoint")
 	}

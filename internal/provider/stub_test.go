@@ -36,6 +36,11 @@ type stubAPI struct {
 	lastPrivateKey string
 	lastPassword   string
 
+	// The last crontab body sent, so a test can pin which field names went on
+	// the wire — the one thing about that endpoint the live API could not
+	// settle.
+	lastCrontabPayload map[string]any
+
 	// Requests counts served requests, so tests can assert that a refresh costs
 	// one listing per record type rather than one per record.
 	Requests atomic.Int64

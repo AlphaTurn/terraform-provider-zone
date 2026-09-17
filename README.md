@@ -76,6 +76,10 @@ source:
 | `zone_mail_dkim` | DKIM signing for outgoing mail |
 | `zone_mysql_database` · `zone_mysql_account` · `zone_mysql_permission` | databases, users and grants |
 | `zone_ssl_certificate` | a TLS certificate and its key |
+| `zone_ssh_settings` | who may reach a service's SSH |
+| `zone_ssh_public_key` · `zone_ssh_whitelist_ip` | authorised keys and allowed addresses |
+| `zone_ftp_user` · `zone_ftp_ip_whitelist` | FTP accounts and allowed addresses |
+| `zone_crontab` | scheduled jobs |
 
 Data sources: `zone_dns_zone`, `zone_dns_records`, `zone_domains` and
 `zone_vservers`.
@@ -187,11 +191,26 @@ scalar types — the provider follows the live API and tolerates both.
 
 ## What is not covered yet
 
-v0.1 is DNS only: 23 of the API's 93 endpoints. Domain management, webhosting
-(mail, MySQL, SSL, FTP, cron), and cloud servers are not implemented.
-[`ROADMAP.md`](ROADMAP.md) breaks down the remaining 70 endpoints, the order
-they are worth adding in, and the groundwork each needs — pagination being the
-main one, since DNS is the only area that does not paginate.
+Three areas are left, and two of them are left on purpose.
+
+**Runtimes and networking** — PM2, Redis, port forwarding, dedicated IPs,
+ZoneCloud and turbo — is simply not done yet. It is also where the API stops
+being Terraform-shaped: `start`, `stop`, `restart` and `regenerateauth` are
+operations rather than state, so they have no natural place in a resource's
+CRUD, and Redis has neither `PUT` nor `DELETE`, so it could only ever be
+created and read.
+
+**Ordering is deliberately absent.** `POST /order/cloud` provisions a billable
+VPS and `POST /order/domain/renew` spends money. An apply that quietly bills
+the account is a bad failure mode, and a destroy that deletes a server because
+a resource was renamed is a worse one. The same reasoning keeps
+`PUT /vserver/{service}/mail/account/{address}/premium` out: it activates a
+paid package.
+
+**Cloud servers** are absent for the same reason — `DELETE /cloud/{name}`
+destroys a server. If they are ever added it should be as read-only data
+sources first, so the state is at least visible from Terraform without being
+mutable from it.
 
 Contributions welcome.
 

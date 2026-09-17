@@ -18,6 +18,12 @@ FEATURES:
 * **New Resource:** `zone_mysql_account`
 * **New Resource:** `zone_mysql_permission`
 * **New Resource:** `zone_ssl_certificate`
+* **New Resource:** `zone_ssh_settings`
+* **New Resource:** `zone_ssh_public_key`
+* **New Resource:** `zone_ssh_whitelist_ip`
+* **New Resource:** `zone_ftp_user`
+* **New Resource:** `zone_ftp_ip_whitelist`
+* **New Resource:** `zone_crontab`
 
 ENHANCEMENTS:
 
@@ -65,9 +71,27 @@ NOTES:
 * `zone_mail_autoreply` is a separate resource because the same object hangs off
   both mailboxes and forwarders. Destroying one disables it, which is as close
   to deletion as its endpoint allows.
+* `zone_crontab`'s argument names come from the live API's `OPTIONS` response,
+  not from zone.eu's published description, which disagrees with it: `OPTIONS`
+  reports `exec_type`, `nice` and `schedule_type` where the document says
+  `type` and `priority` and omits the third entirely. No account available for
+  testing had a crontab, so no read could settle it. Reads accept either
+  spelling; writes use the `OPTIONS` names.
+* `zone_ssh_public_key`, `zone_ssh_whitelist_ip` and `zone_ftp_ip_whitelist`
+  have no update operation at all, so every argument forces replacement. They
+  can be imported by their natural key — a fingerprint or an address — as well
+  as by their numeric id, since that is what a person actually has.
+* `zone_ftp_ip_whitelist`'s create payload is inferred. The published
+  description marks every field of that object read-only while still requiring
+  a request body, which cannot both be true, so the provider sends the address.
+* Setting `zone_ssh_settings.access` to `whitelist` with no whitelist entries
+  locks you out of the server. Terraform cannot express that across resources,
+  so the documentation and examples pair them.
 * The create, update and delete paths of the webhosting resources are exercised
   against the stub only. Proving them would have meant writing to a production
-  hosting service; every read path is verified against the live API.
+  hosting service; every read path is verified against the live API, including
+  against services that hold real SSH keys, FTP users, databases and
+  certificates.
 
 ## 0.1.0 (2026-09-17)
 

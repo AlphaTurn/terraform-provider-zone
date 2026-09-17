@@ -2,6 +2,7 @@ package provider
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -48,4 +49,18 @@ func importKey(diags *diag.Diagnostics, id, shape, example string) (string, stri
 		return "", "", false
 	}
 	return first, rest, true
+}
+
+// parseImportInt64 reads a numeric part of an import ID.
+func parseImportInt64(diags *diag.Diagnostics, raw string) (int64, bool) {
+	id, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil {
+		diags.AddError(
+			"Invalid import ID",
+			fmt.Sprintf("Expected a numeric identifier, but %q could not be parsed.\n\n"+
+				"Identifiers are visible in the resource_url of an existing object, or from the API.", raw),
+		)
+		return 0, false
+	}
+	return id, true
 }

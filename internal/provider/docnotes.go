@@ -19,3 +19,11 @@ const (
 		"read, and exercising it would have changed a production service. It may need correcting; " +
 		"please report what happens."
 )
+
+// replaceOnlyNote belongs on the resources whose endpoints offer no update at
+// all. Several of the webhosting endpoints are create-and-delete only, and a
+// user reasonably expects to be able to edit a comment.
+const replaceOnlyNote = "~> **This resource cannot be changed in place.** Its endpoint offers no " +
+	"update operation, so every argument below forces Terraform to destroy and recreate it. That " +
+	"is cheap here — the object carries no data — but it does mean a brief window with the entry " +
+	"absent."

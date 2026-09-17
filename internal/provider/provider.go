@@ -169,7 +169,7 @@ func (p *zoneProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 func (p *zoneProvider) Resources(context.Context) []func() resource.Resource {
 	definitions := dnsrecord.Definitions()
 
-	resources := make([]func() resource.Resource, 0, len(definitions)+12)
+	resources := make([]func() resource.Resource, 0, len(definitions)+18)
 	for _, definition := range definitions {
 		resources = append(resources, dnsrecord.NewResource(definition))
 	}
@@ -186,6 +186,12 @@ func (p *zoneProvider) Resources(context.Context) []func() resource.Resource {
 		NewMySQLAccountResource,
 		NewMySQLPermissionResource,
 		NewSSLCertificateResource,
+		NewSSHSettingsResource,
+		NewSSHPublicKeyResource,
+		NewSSHWhitelistIPResource,
+		NewFTPUserResource,
+		NewFTPIPWhitelistResource,
+		NewCrontabResource,
 	)
 	return resources
 }
