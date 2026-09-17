@@ -184,10 +184,36 @@ provider_installation {
 }
 ```
 
+`make test` also has a live half, skipped unless `ZONE_USERNAME` and
+`ZONE_API_TOKEN` are set. Those tests only ever issue `GET`s: they exist to
+prove that the provider's models decode real responses, which is the one thing
+a stub cannot tell you. `ZONE_TEST_ZONE` additionally enables the DNS lifecycle
+tests, which do write, so it must name a disposable zone; `ZONE_TEST_SERVICE`
+picks which webhosting service the read-only checks use.
+
 `api/zone-openapi.json` is the API description extracted from zone.eu's ReDoc
 documentation page, checked in so the mapping between resources and endpoints
-can be audited. Where the live API and that document disagree — and they do, on
-scalar types — the provider follows the live API and tolerates both.
+can be audited. **Where the live API and that document disagree, the provider
+follows the live API.** They disagree more than you would expect, and not only
+on scalar types:
+
+- Record ids are quoted strings on most DNS endpoints and bare integers on SRV.
+  An SSH key's size is a quoted number on RSA keys and null on Ed25519.
+- `server_fingerprints` is documented as an array of strings and is an object
+  keyed by algorithm.
+- `/vserver/{service}/ssl` paginates, with no pager parameters in its schema.
+- `GET /vserver` is not in the document at all.
+- `GET /vserver/{service}/ssl` returns `private_key` as an empty string, so the
+  key is write-only in practice however the schema describes it.
+- `OPTIONS /vserver/{service}/crontab` reports `exec_type`, `nice` and
+  `schedule_type` where the document says `type` and `priority` and omits the
+  third.
+- `PUT /domain/{name}` declares no request body.
+
+The coercion helpers in `internal/zoneapi/flex.go` absorb the scalar cases, and
+where a field name itself is in doubt the client accepts either spelling on the
+way in. The rule throughout is tolerance on reads, and the documented shape on
+writes.
 
 ## What is not covered yet
 
