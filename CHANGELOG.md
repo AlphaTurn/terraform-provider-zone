@@ -10,6 +10,14 @@ FEATURES:
 * **New Data Source:** `zone_domains`
 * **New Data Source:** `zone_vservers`, listing the webhosting services on the
   account and the `service_name` values the webhosting resources take
+* **New Resource:** `zone_mail_account`
+* **New Resource:** `zone_mail_forwarder`
+* **New Resource:** `zone_mail_autoreply`, for either a mailbox or a forwarder
+* **New Resource:** `zone_mail_dkim`
+* **New Resource:** `zone_mysql_database`
+* **New Resource:** `zone_mysql_account`
+* **New Resource:** `zone_mysql_permission`
+* **New Resource:** `zone_ssl_certificate`
 
 ENHANCEMENTS:
 
@@ -37,6 +45,29 @@ NOTES:
 * The update path of `zone_domain` is unverified against the live API, for the
   same reason `zone_dns_zone`'s is: the published description declares no
   request body, and exercising it would have changed a production domain.
+* Passwords and private keys are write-only arguments, which need Terraform
+  1.11 or newer. They are sent to zone.eu and never written to state. Terraform
+  cannot detect a change to a value it does not keep, so the mail, database and
+  FTP account resources carry a `password_version` to force a re-send; a
+  certificate needs none, because its key always changes alongside a
+  `certificate` that is in state.
+* `zone_mysql_database` cannot be modified at all: the API has no endpoint for
+  it, so every argument forces replacement, and replacing a database drops it.
+  The examples set `prevent_destroy` for that reason.
+* `zone_mysql_permission` refuses to adopt a grant that already exists. Its
+  endpoint has no `POST`, so a create could not tell granting from silently
+  replacing privileges nobody asked to change; import the grant instead.
+* `zone_mail_account.two_factor_auth` can only be set to `false`, which is all
+  the API allows — the mailbox's owner turns it on in webmail. Asking for `true`
+  is refused during validation rather than by a 422 mid-apply.
+* An archived mailbox reads as missing rather than being adopted as a
+  tombstone Terraform could never reconcile.
+* `zone_mail_autoreply` is a separate resource because the same object hangs off
+  both mailboxes and forwarders. Destroying one disables it, which is as close
+  to deletion as its endpoint allows.
+* The create, update and delete paths of the webhosting resources are exercised
+  against the stub only. Proving them would have meant writing to a production
+  hosting service; every read path is verified against the live API.
 
 ## 0.1.0 (2026-09-17)
 

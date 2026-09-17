@@ -155,16 +155,25 @@ func (s *stubAPI) respondPaged(w http.ResponseWriter, r *http.Request, items []m
 }
 
 func (s *stubAPI) serveVServer(w http.ResponseWriter, r *http.Request, segments []string) {
-	if len(segments) != 1 || r.Method != http.MethodGet {
+	if len(segments) == 1 {
+		if r.Method != http.MethodGet {
+			s.fail(w, http.StatusNotFound, "Unknown endpoint")
+			return
+		}
+
+		s.mu.Lock()
+		services := append([]map[string]any(nil), s.vservers...)
+		s.mu.Unlock()
+
+		s.respondPaged(w, r, services)
+		return
+	}
+	if len(segments) < 3 {
 		s.fail(w, http.StatusNotFound, "Unknown endpoint")
 		return
 	}
 
-	s.mu.Lock()
-	services := append([]map[string]any(nil), s.vservers...)
-	s.mu.Unlock()
-
-	s.respondPaged(w, r, services)
+	s.serveVServerService(w, r, segments)
 }
 
 func (s *stubAPI) serveDomain(w http.ResponseWriter, r *http.Request, segments []string) {

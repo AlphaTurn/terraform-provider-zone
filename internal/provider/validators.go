@@ -87,3 +87,51 @@ func noPathSeparator() validator.String {
 		},
 	}
 }
+
+// isPEMBlock checks that a value looks like the PEM block it is supposed to be.
+//
+// This is hand-written rather than a stringvalidator.RegexMatches on purpose.
+// That validator builds its diagnostic with the offending value interpolated
+// into the message, which would print a malformed private key in full to the
+// terminal and into any log capturing it. Nothing here ever reports the value:
+// only what kind of block was found instead.
+func isPEMBlock(kind string) validator.String {
+	want := "-----BEGIN " + kind + "-----"
+
+	return stringCheck{
+		description: "must be a PEM-encoded " + strings.ToLower(kind),
+		check: func(value string) error {
+			trimmed := strings.TrimSpace(value)
+			if trimmed == "" {
+				return fmt.Errorf("is empty, but a %s is required.", strings.ToLower(kind))
+			}
+			if strings.Contains(trimmed, want) {
+				return nil
+			}
+
+			// Naming the block that was supplied is the single most useful
+			// thing to say, and it is safe: a BEGIN line carries no secret.
+			if begin := pemBeginLine(trimmed); begin != "" {
+				return fmt.Errorf(
+					"is a %q block, but a %q block is required here. Check that the right file is "+
+						"in the right argument.", begin, want,
+				)
+			}
+			return fmt.Errorf(
+				"is not PEM encoded: no %q line was found. Supply the file's contents, for example "+
+					"with file(\"cert.pem\"), rather than its path.", want,
+			)
+		},
+	}
+}
+
+// pemBeginLine returns the BEGIN line of a PEM block, or "" if there is none.
+func pemBeginLine(value string) string {
+	for line := range strings.SplitSeq(value, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "-----BEGIN ") && strings.HasSuffix(line, "-----") {
+			return line
+		}
+	}
+	return ""
+}

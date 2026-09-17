@@ -29,6 +29,12 @@ type stubAPI struct {
 	nameservers map[string][]map[string]any
 	contacts    map[string][]map[string]any
 	vservers    []map[string]any
+	services    map[string]*stubService
+
+	// The secrets most recently sent, so a test can prove a write-only value
+	// reached the API even though it is absent from state by design.
+	lastPrivateKey string
+	lastPassword   string
 
 	// Requests counts served requests, so tests can assert that a refresh costs
 	// one listing per record type rather than one per record.
@@ -53,6 +59,7 @@ func newStubAPI() *stubAPI {
 		nameservers: newStubNameservers(),
 		contacts:    newStubContacts(),
 		vservers:    newStubVServers(),
+		services:    newStubServices(),
 	}
 }
 

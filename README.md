@@ -66,6 +66,17 @@ Domains:
 | `zone_domain_nameservers` | a domain's whole nameserver delegation |
 | `zone_domain_contact` | a registry contact attached to a domain |
 
+Webhosting, all scoped by a `service_name` from the `zone_vservers` data
+source:
+
+| Resource | |
+|---|---|
+| `zone_mail_account` · `zone_mail_forwarder` | mailboxes and forwarding addresses |
+| `zone_mail_autoreply` | vacation messages, on either of the above |
+| `zone_mail_dkim` | DKIM signing for outgoing mail |
+| `zone_mysql_database` · `zone_mysql_account` · `zone_mysql_permission` | databases, users and grants |
+| `zone_ssl_certificate` | a TLS certificate and its key |
+
 Data sources: `zone_dns_zone`, `zone_dns_records`, `zone_domains` and
 `zone_vservers`.
 
@@ -95,6 +106,20 @@ mail records come back with `modify` and `delete` denied. Those surface as the
 read-only `modifiable` and `deletable` attributes, and trying to change one
 produces an explanation rather than a bare HTTP 400. Use `terraform state rm` to
 stop managing such a record without trying to remove it.
+
+## Secrets, and what is not in your state file
+
+Passwords and private keys are **write-only arguments**: they are sent to
+zone.eu and never written to state. State is not an encrypted store, and a
+secret in it is a secret in every backup and CI artefact the file passes
+through. This needs Terraform 1.11 or newer; everything else in the provider
+works from 1.8.
+
+The trade is that Terraform cannot detect a change to a value it does not keep.
+For a certificate that does not matter, because a new key arrives with a new
+`certificate`, which *is* in state. For a password there is nothing else to
+notice, so each of those resources has a `password_version` you bump to say
+"send it again".
 
 ## The rate limit, and what the provider does about it
 
