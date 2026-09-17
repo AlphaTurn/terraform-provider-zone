@@ -19,12 +19,12 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      # The signing key carries no passphrase, so none is passed here.
       - name: Import GPG key
         uses: crazy-max/ghaction-import-gpg@v7
         id: import_gpg
         with:
           gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
-          passphrase: ${{ secrets.PASSPHRASE }}
 
       - uses: goreleaser/goreleaser-action@v7
         with:

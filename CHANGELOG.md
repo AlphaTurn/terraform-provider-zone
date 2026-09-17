@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0 (unreleased)
+## 0.1.0 (2026-09-17)
 
 First release. Covers the DNS surface of the zone.eu ZoneID API v2.
 
