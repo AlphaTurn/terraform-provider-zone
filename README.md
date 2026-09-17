@@ -151,6 +151,16 @@ documentation page, checked in so the mapping between resources and endpoints
 can be audited. Where the live API and that document disagree — and they do, on
 scalar types — the provider follows the live API and tolerates both.
 
+## What is not covered yet
+
+v0.1 is DNS only: 23 of the API's 93 endpoints. Domain management, webhosting
+(mail, MySQL, SSL, FTP, cron), and cloud servers are not implemented.
+[`ROADMAP.md`](ROADMAP.md) breaks down the remaining 70 endpoints, the order
+they are worth adding in, and the groundwork each needs — pagination being the
+main one, since DNS is the only area that does not paginate.
+
+Contributions welcome.
+
 ## Licence
 
 [MPL-2.0](LICENSE).
