@@ -11,9 +11,15 @@ import (
 
 // stringCheck adapts a plain function into a string validator, which is all
 // these need: each one reports a single sentence naming the fix.
+//
+// check returns the explanation to show, or an empty string when the value is
+// acceptable. It deliberately does not return an error: these are complete
+// sentences written for the person reading the plan, not Go error strings, and
+// making them errors would mean writing them in a style that reads badly in a
+// diagnostic.
 type stringCheck struct {
 	description string
-	check       func(string) error
+	check       func(string) string
 }
 
 func (v stringCheck) Description(context.Context) string         { return v.description }
@@ -23,8 +29,8 @@ func (v stringCheck) ValidateString(_ context.Context, req validator.StringReque
 	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
 		return
 	}
-	if err := v.check(req.ConfigValue.ValueString()); err != nil {
-		resp.Diagnostics.AddAttributeError(req.Path, "Invalid value", err.Error())
+	if problem := v.check(req.ConfigValue.ValueString()); problem != "" {
+		resp.Diagnostics.AddAttributeError(req.Path, "Invalid value", problem)
 	}
 }
 
@@ -33,20 +39,20 @@ func (v stringCheck) ValidateString(_ context.Context, req validator.StringReque
 func isIPOrPrefix() validator.String {
 	return stringCheck{
 		description: "must be an IPv4 or IPv6 address, optionally with a prefix length",
-		check: func(value string) error {
+		check: func(value string) string {
 			if strings.Contains(value, "/") {
 				if _, err := netip.ParsePrefix(value); err != nil {
-					return fmt.Errorf("%q is not a valid IP network. Write it as 217.128.0.0/24.", value)
+					return fmt.Sprintf("%q is not a valid IP network. Write it as 217.128.0.0/24.", value)
 				}
-				return nil
+				return ""
 			}
 			if _, err := netip.ParseAddr(value); err != nil {
-				return fmt.Errorf(
+				return fmt.Sprintf(
 					"%q is not a valid IP address. Use an IPv4 or IPv6 address, or a network such as 217.128.0.0/24.",
 					value,
 				)
 			}
-			return nil
+			return ""
 		},
 	}
 }
@@ -58,15 +64,15 @@ func isIPOrPrefix() validator.String {
 func isEmailAddress() validator.String {
 	return stringCheck{
 		description: "must be an email address",
-		check: func(value string) error {
+		check: func(value string) string {
 			local, domain, found := strings.Cut(value, "@")
 			if !found || local == "" || domain == "" || strings.Contains(domain, "@") {
-				return fmt.Errorf("%q is not an email address. It needs a local part, an @ and a domain.", value)
+				return fmt.Sprintf("%q is not an email address. It needs a local part, an @ and a domain.", value)
 			}
 			if !strings.Contains(domain, ".") {
-				return fmt.Errorf("%q has no domain suffix, so it cannot receive mail.", value)
+				return fmt.Sprintf("%q has no domain suffix, so it cannot receive mail.", value)
 			}
-			return nil
+			return ""
 		},
 	}
 }
@@ -76,14 +82,14 @@ func isEmailAddress() validator.String {
 func noPathSeparator() validator.String {
 	return stringCheck{
 		description: "must not contain a slash",
-		check: func(value string) error {
+		check: func(value string) string {
 			if strings.ContainsAny(value, "/\\") {
-				return fmt.Errorf("%q contains a slash, which cannot appear in a zone.eu identifier.", value)
+				return fmt.Sprintf("%q contains a slash, which cannot appear in a zone.eu identifier.", value)
 			}
 			if strings.TrimSpace(value) != value {
-				return fmt.Errorf("%q has leading or trailing whitespace.", value)
+				return fmt.Sprintf("%q has leading or trailing whitespace.", value)
 			}
-			return nil
+			return ""
 		},
 	}
 }
@@ -100,24 +106,24 @@ func isPEMBlock(kind string) validator.String {
 
 	return stringCheck{
 		description: "must be a PEM-encoded " + strings.ToLower(kind),
-		check: func(value string) error {
+		check: func(value string) string {
 			trimmed := strings.TrimSpace(value)
 			if trimmed == "" {
-				return fmt.Errorf("is empty, but a %s is required.", strings.ToLower(kind))
+				return fmt.Sprintf("is empty, but a %s is required.", strings.ToLower(kind))
 			}
 			if strings.Contains(trimmed, want) {
-				return nil
+				return ""
 			}
 
 			// Naming the block that was supplied is the single most useful
 			// thing to say, and it is safe: a BEGIN line carries no secret.
 			if begin := pemBeginLine(trimmed); begin != "" {
-				return fmt.Errorf(
+				return fmt.Sprintf(
 					"is a %q block, but a %q block is required here. Check that the right file is "+
 						"in the right argument.", begin, want,
 				)
 			}
-			return fmt.Errorf(
+			return fmt.Sprintf(
 				"is not PEM encoded: no %q line was found. Supply the file's contents, for example "+
 					"with file(\"cert.pem\"), rather than its path.", want,
 			)
@@ -144,10 +150,10 @@ func pemBeginLine(value string) string {
 func isSSHPublicKey() validator.String {
 	return stringCheck{
 		description: "must be an OpenSSH public key",
-		check: func(value string) error {
+		check: func(value string) string {
 			trimmed := strings.TrimSpace(value)
 			if strings.HasPrefix(trimmed, "-----BEGIN") {
-				return fmt.Errorf(
+				return fmt.Sprintf(
 					"is a PEM block, not an OpenSSH public key. This wants the single line from a " +
 						".pub file, and a private key must never be sent here.",
 				)
@@ -155,7 +161,7 @@ func isSSHPublicKey() validator.String {
 
 			fields := strings.Fields(trimmed)
 			if len(fields) < 2 {
-				return fmt.Errorf(
+				return fmt.Sprintf(
 					"is not an OpenSSH public key: it should read like \"ssh-ed25519 AAAA... comment\". " +
 						"Pass the file's contents, for example with file(\"~/.ssh/id_ed25519.pub\").",
 				)
@@ -164,10 +170,10 @@ func isSSHPublicKey() validator.String {
 			algorithm := fields[0]
 			for _, prefix := range []string{"ssh-", "ecdsa-", "sk-"} {
 				if strings.HasPrefix(algorithm, prefix) {
-					return nil
+					return ""
 				}
 			}
-			return fmt.Errorf("names an unrecognised key algorithm %q.", algorithm)
+			return fmt.Sprintf("names an unrecognised key algorithm %q.", algorithm)
 		},
 	}
 }
