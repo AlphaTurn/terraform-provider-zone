@@ -1,0 +1,5 @@
+# Keep line endings LF in the repository regardless of platform.
+* text=auto eol=lf
+
+*.exe binary
+*.zip binary

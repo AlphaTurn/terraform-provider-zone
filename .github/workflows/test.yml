@@ -1,0 +1,84 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build and vet
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: go build ./...
+      - run: go vet ./...
+      - name: Check formatting
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "These files need gofmt:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+  lint:
+    name: golangci-lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+
+  docs:
+    name: Docs are current
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: go install github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs@latest
+      - run: tfplugindocs generate --provider-name zone
+      - name: Fail if docs/ is stale
+        run: |
+          if ! git diff --exit-code -- docs/; then
+            echo "docs/ is out of date — run 'make docs' and commit the result."
+            exit 1
+          fi
+
+  test:
+    name: Test (terraform ${{ matrix.terraform }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Oldest supported, plus the current release.
+        terraform: ['1.8.*', '1.15.*']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ matrix.terraform }}
+          terraform_wrapper: false
+      # The stub-backed acceptance suite needs no credentials and reaches no
+      # network service, so it runs on every push. -race is enabled here
+      # because it needs cgo, which is unavailable on the Windows dev machines.
+      - run: go test -race -timeout 20m ./...

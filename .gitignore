@@ -1,0 +1,40 @@
+# Compiled provider binary
+terraform-provider-zone
+terraform-provider-zone.exe
+
+# Goreleaser output
+dist/
+
+# Go
+vendor/
+*.test
+*.out
+coverage.txt
+
+# Terraform
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+
+# Local dev / secrets
+.env
+*.tfvars
+!examples/**/*.tfvars
+
+# Editors
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
